@@ -1,6 +1,0 @@
-storage:
-  backend: local      # local / notion / obsidian
-  local_path: ./data
-  notion_token: ""
-  notion_database_id: ""
-  obsidian_vault_path: ""
