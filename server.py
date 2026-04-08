@@ -22,6 +22,7 @@ from mcp.server.fastmcp import FastMCP
 from prompts.templates import LOGGING_SYSTEM_PROMPT
 from storage import create_backend
 import tools.logging as logging_tools
+import tools.version as version_tools
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.yaml"
@@ -49,6 +50,7 @@ config.setdefault("storage", {})["vault_path"] = str((BASE_DIR / vault_path).res
 
 backend = create_backend(config)
 logging_tools.init(backend)
+version_tools.init(backend)
 
 mcp = FastMCP("resume-agent")
 
@@ -57,6 +59,10 @@ mcp = FastMCP("resume-agent")
 mcp.tool()(logging_tools.get_experiences)
 mcp.tool()(logging_tools.create_experience)
 mcp.tool()(logging_tools.log_bullet)
+mcp.tool()(version_tools.create_base_resume)
+mcp.tool()(version_tools.create_resume_version)
+mcp.tool()(version_tools.list_resumes)
+mcp.tool()(version_tools.get_resume)
 
 # ── prompts ─────────────────────────────────────────────────────────
 

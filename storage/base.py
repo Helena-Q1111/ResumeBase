@@ -46,3 +46,33 @@ class StorageBackend(ABC):
         metric_values: list[str] | None = None,
     ) -> str:
         raise NotImplementedError
+
+    # ── resume version management ──────────────────────────────────
+
+    @abstractmethod
+    def create_base_resume(
+        self,
+        direction: str,
+        bullet_ids: list[str],
+        content: str,
+    ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_resume_version(
+        self,
+        name: str,
+        base_id: str,
+        jd: dict[str, Any],
+        bullet_ids: list[str],
+        content: str,
+    ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_resumes(self, direction: str | None = None) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_resume(self, resume_id: str) -> dict[str, Any]:
+        raise NotImplementedError

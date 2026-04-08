@@ -33,6 +33,7 @@ BULLET_TEMPLATE = """\
 
 RESUME_TEMPLATE = """\
 ## 简历正文
+{content}
 """
 
 
@@ -169,3 +170,103 @@ class MarkdownStorage(StorageBackend):
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return bullet_id
+
+    # ── resume version management ──────────────────────────────────
+
+    def create_base_resume(
+        self,
+        direction: str,
+        bullet_ids: list[str],
+        content: str,
+    ) -> str:
+        resume_id = self._new_id("res")
+        now = self._now()
+
+        meta: dict[str, Any] = {
+            "id": resume_id,
+            "name": f"{direction}-base",
+            "direction": direction,
+            "is_base": True,
+            "base_id": None,
+            "jd": None,
+            "bullet_ids": bullet_ids,
+            "diff_from_base": None,
+            "export_path": "",
+            "created_at": now,
+        }
+
+        body = RESUME_TEMPLATE.format(content=content)
+        post = frontmatter.Post(body, **meta)
+        path = self.resumes_dir / f"{resume_id}.md"
+        path.write_text(frontmatter.dumps(post), encoding="utf-8")
+
+        return resume_id
+
+    def create_resume_version(
+        self,
+        name: str,
+        base_id: str,
+        jd: dict[str, Any],
+        bullet_ids: list[str],
+        content: str,
+    ) -> str:
+        # load base to compute diff
+        base_path = self.resumes_dir / f"{base_id}.md"
+        if not base_path.exists():
+            raise ValueError(f"Base resume {base_id} not found")
+
+        base_post = frontmatter.load(str(base_path))
+        base_bullet_ids = set(base_post.metadata.get("bullet_ids", []))
+        current_ids = set(bullet_ids)
+
+        diff: list[dict[str, str]] = []
+        for bid in current_ids - base_bullet_ids:
+            diff.append({"action": "add", "bullet_id": bid})
+        for bid in base_bullet_ids - current_ids:
+            diff.append({"action": "remove", "bullet_id": bid})
+
+        resume_id = self._new_id("res")
+        now = self._now()
+
+        meta: dict[str, Any] = {
+            "id": resume_id,
+            "name": name,
+            "direction": base_post.metadata.get("direction", ""),
+            "is_base": False,
+            "base_id": base_id,
+            "jd": jd,
+            "bullet_ids": bullet_ids,
+            "diff_from_base": diff or None,
+            "export_path": "",
+            "created_at": now,
+        }
+
+        body = RESUME_TEMPLATE.format(content=content)
+        post = frontmatter.Post(body, **meta)
+        path = self.resumes_dir / f"{resume_id}.md"
+        path.write_text(frontmatter.dumps(post), encoding="utf-8")
+
+        return resume_id
+
+    def list_resumes(self, direction: str | None = None) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for path in sorted(self.resumes_dir.glob("*.md")):
+            post = frontmatter.load(str(path))
+            meta = dict(post.metadata)
+            if direction and meta.get("direction") != direction:
+                continue
+            results.append({
+                "id": meta.get("id"),
+                "name": meta.get("name"),
+                "direction": meta.get("direction"),
+                "is_base": meta.get("is_base"),
+                "created_at": meta.get("created_at"),
+            })
+        return results
+
+    def get_resume(self, resume_id: str) -> dict[str, Any]:
+        path = self.resumes_dir / f"{resume_id}.md"
+        if not path.exists():
+            raise ValueError(f"Resume {resume_id} not found")
+        post = frontmatter.load(str(path))
+        return {**post.metadata, "content": post.content}
