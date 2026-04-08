@@ -30,3 +30,6 @@ Thumbs.db
 config.yaml
 data/db.json
 data/exports/
+
+
+test-storage.py

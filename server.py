@@ -1,50 +1,46 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any
+"""
+Claude Desktop 注册示例（claude_desktop_config.json）：
 
-import yaml
+{
+  "mcpServers": {
+    "resume-agent": {
+      "command": "python",
+      "args": ["绝对路径/server.py"]
+    }
+  }
+}
+"""
+
 from mcp.server.fastmcp import FastMCP
 
-from tools.logging import log_experience as log_experience_impl
-
-BASE_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = BASE_DIR / "config.yaml"
-
-
-def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(
-            "config.yaml not found. Copy config.example.yaml to config.yaml first."
-        )
-
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    if not isinstance(data, dict):
-        raise ValueError("config.yaml must define a YAML object at the top level")
-
-    return data
+from prompts.templates import LOGGING_SYSTEM_PROMPT
+from tools.logging import create_experience, get_experiences, log_bullet
 
 
 mcp = FastMCP("resume-agent")
 
 
-@mcp.tool()
-def log_experience(text: str) -> str:
-    """记录一段经历文本（第一阶段仅打印，不写入存储）。"""
-    return log_experience_impl(text)
+# Directly register the three logging tools imported from tools/logging.py.
+mcp.tool()(get_experiences)
+mcp.tool()(create_experience)
+mcp.tool()(log_bullet)
 
 
-@mcp.tool()
-def health_check() -> str:
-    """Simple health check for quick debugging in clients."""
-    config = load_config()
-    backend = config.get("storage", {}).get("backend", "local")
-    return json.dumps({"status": "ok", "backend": backend}, ensure_ascii=False)
+@mcp.prompt(name="log")
+def log_prompt() -> str:
+    """Prompt invoked by /log in Claude Desktop."""
+    # If your installed SDK version uses a different prompt decorator signature,
+    # replace with the closest equivalent (e.g. @mcp.prompt("log")).
+    return LOGGING_SYSTEM_PROMPT
 
 
 if __name__ == "__main__":
-    # Uses stdio transport so Claude Desktop can launch and talk to this server.
+    # 验证方式：
+    # 1) 启动：在项目根目录执行 `python server.py`（或由 Claude Desktop 按配置自动拉起）。
+    # 2) 验证 get_experiences：在 Claude Desktop 输入 `/log` 后发送“先帮我看已有经历”，
+    #    正常情况下模型会调用 get_experiences 并返回已有 experience 摘要。
+    # 3) 验证 log_bullet：在 Claude Desktop 继续输入一条可归属的经历描述，
+    #    然后检查 data/db.json 中对应 experience 的 bullets 下是否新增 bul_xxxxxx 记录。
     mcp.run()

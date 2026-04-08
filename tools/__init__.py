@@ -1,1 +1,1 @@
-"""Tool package for resume-agent."""
+"""Tool package for resume-base."""
