@@ -1,0 +1,3 @@
+storage:
+  backend: markdown      # 唯一后端
+  vault_path: ./data     # 默认当前目录，Obsidian 用户指向自己的 vault

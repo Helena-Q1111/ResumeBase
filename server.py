@@ -5,7 +5,7 @@ Claude Desktop 注册示例（claude_desktop_config.json）：
 
 {
   "mcpServers": {
-    "resume-agent": {
+    "resume-base": {
       "command": "python",
       "args": ["绝对路径/server.py"]
     }
@@ -13,34 +13,59 @@ Claude Desktop 注册示例（claude_desktop_config.json）：
 }
 """
 
+from pathlib import Path
+from typing import Any
+
+import yaml
 from mcp.server.fastmcp import FastMCP
 
 from prompts.templates import LOGGING_SYSTEM_PROMPT
-from tools.logging import create_experience, get_experiences, log_bullet
+from storage import create_backend
+import tools.logging as logging_tools
 
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_DIR / "config.yaml"
+
+
+def load_config() -> dict[str, Any]:
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError(
+            "config.yaml not found. Copy config.example.yaml to config.yaml first."
+        )
+    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError("config.yaml must define a YAML object at the top level")
+    return data
+
+
+# ── init ────────────────────────────────────────────────────────────
+
+config = load_config()
+
+# resolve relative vault_path against project root
+vault_path = config.get("storage", {}).get("vault_path", "./data")
+config.setdefault("storage", {})["vault_path"] = str((BASE_DIR / vault_path).resolve())
+
+backend = create_backend(config)
+logging_tools.init(backend)
 
 mcp = FastMCP("resume-agent")
 
+# ── tools ───────────────────────────────────────────────────────────
 
-# Directly register the three logging tools imported from tools/logging.py.
-mcp.tool()(get_experiences)
-mcp.tool()(create_experience)
-mcp.tool()(log_bullet)
+mcp.tool()(logging_tools.get_experiences)
+mcp.tool()(logging_tools.create_experience)
+mcp.tool()(logging_tools.log_bullet)
+
+# ── prompts ─────────────────────────────────────────────────────────
 
 
 @mcp.prompt(name="log")
 def log_prompt() -> str:
     """Prompt invoked by /log in Claude Desktop."""
-    # If your installed SDK version uses a different prompt decorator signature,
-    # replace with the closest equivalent (e.g. @mcp.prompt("log")).
     return LOGGING_SYSTEM_PROMPT
 
 
 if __name__ == "__main__":
-    # 验证方式：
-    # 1) 启动：在项目根目录执行 `python server.py`（或由 Claude Desktop 按配置自动拉起）。
-    # 2) 验证 get_experiences：在 Claude Desktop 输入 `/log` 后发送“先帮我看已有经历”，
-    #    正常情况下模型会调用 get_experiences 并返回已有 experience 摘要。
-    # 3) 验证 log_bullet：在 Claude Desktop 继续输入一条可归属的经历描述，
-    #    然后检查 data/db.json 中对应 experience 的 bullets 下是否新增 bul_xxxxxx 记录。
     mcp.run()

@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from storage.local import LocalJSONStorage
 
-_DB_PATH = Path(__file__).parent.parent / "data" / "db.json"
-_storage = LocalJSONStorage(str(_DB_PATH))
+from storage.base import StorageBackend
+
+_backend: StorageBackend | None = None
+
+
+def init(backend: StorageBackend) -> None:
+    """Called once by server.py at startup to inject the storage backend."""
+    global _backend
+    _backend = backend
+
+
+def _get_backend() -> StorageBackend:
+    if _backend is None:
+        raise RuntimeError("Storage backend not initialized. Call init() first.")
+    return _backend
 
 
 def get_experiences() -> str:
     """列出所有已有经历，判断 bullet 归属前调用。"""
-    return json.dumps(_storage.get_experiences(), ensure_ascii=False)
+    return json.dumps(_get_backend().get_experiences(), ensure_ascii=False)
 
 
 def create_experience(
@@ -24,17 +35,15 @@ def create_experience(
     tool_tags: list[str] | None = None,
 ) -> str:
     """用户有新经历时建立锚点，log_bullet 前必须先有对应 experience。"""
-    return str(
-        _storage.create_experience(
-            organization=organization,
-            role=role,
-            start=start,
-            exp_type=exp_type,
-            end=end,
-            direction_tags=direction_tags,
-            skill_tags=skill_tags,
-            tool_tags=tool_tags,
-        )
+    return _get_backend().create_experience(
+        organization=organization,
+        role=role,
+        start=start,
+        exp_type=exp_type,
+        end=end,
+        direction_tags=direction_tags,
+        skill_tags=skill_tags,
+        tool_tags=tool_tags,
     )
 
 
@@ -49,15 +58,13 @@ def log_bullet(
     metric_values: list[str] | None = None,
 ) -> str:
     """写入一条提炼好的 bullet，rewritten 由 agent 在调用前生成。"""
-    return str(
-        _storage.log_bullet(
-            exp_id=exp_id,
-            raw=raw,
-            rewritten=rewritten,
-            skill_tags=skill_tags,
-            tool_tags=tool_tags,
-            category=category,
-            has_number=has_number,
-            metric_values=metric_values,
-        )
+    return _get_backend().log_bullet(
+        exp_id=exp_id,
+        raw=raw,
+        rewritten=rewritten,
+        skill_tags=skill_tags,
+        tool_tags=tool_tags,
+        category=category,
+        has_number=has_number,
+        metric_values=metric_values,
     )
