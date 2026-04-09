@@ -32,6 +32,8 @@ data/experiences/
 data/materials/
 data/resumes/
 data/exports/
+data/.obsidian/
+server.log
 
 
 test-storage.py

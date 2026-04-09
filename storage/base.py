@@ -8,20 +8,14 @@ class StorageBackend(ABC):
     """Abstract storage backend interface."""
 
     @abstractmethod
-    def load_db(self) -> dict[str, Any]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def save_db(self, db: dict[str, Any]) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
     def get_experiences(self) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod
     def create_experience(
         self,
+        project_name: str,
+        direction: str,
         organization: str,
         role: str,
         start: str,
@@ -37,6 +31,7 @@ class StorageBackend(ABC):
     def log_bullet(
         self,
         exp_id: str,
+        bullet_name: str,
         raw: str,
         rewritten: str,
         skill_tags: list[str] | None = None,

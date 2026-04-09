@@ -57,31 +57,15 @@ class MarkdownStorage(StorageBackend):
     def _new_id(self, prefix: str) -> str:
         return f"{prefix}_{uuid.uuid4().hex[:6]}"
 
+    def _find_by_id(self, directory: Path, target_id: str) -> frontmatter.Post:
+        """在指定目录下按 frontmatter id 查找，找不到抛异常。"""
+        for path in directory.glob("*.md"):
+            post = frontmatter.load(str(path))
+            if post.metadata.get("id") == target_id:
+                return post
+        raise ValueError(f"ID {target_id} not found in {directory.name}")
+
     # ── StorageBackend interface ────────────────────────────────────
-
-    def load_db(self) -> dict[str, Any]:
-        """Load all experiences and their bullets into a dict."""
-        db: dict[str, Any] = {"experiences": {}}
-        for path in self.experiences_dir.glob("*.md"):
-            post = frontmatter.load(str(path))
-            exp_id = post.metadata.get("id", path.stem)
-            db["experiences"][exp_id] = {**post.metadata, "content": post.content}
-
-        # attach bullets to their parent experience
-        for path in self.materials_dir.glob("*.md"):
-            post = frontmatter.load(str(path))
-            exp_id = post.metadata.get("exp_id")
-            if exp_id and exp_id in db["experiences"]:
-                exp = db["experiences"][exp_id]
-                exp.setdefault("bullets", {})[post.metadata.get("id", path.stem)] = {
-                    **post.metadata,
-                    "content": post.content,
-                }
-        return db
-
-    def save_db(self, db: dict[str, Any]) -> None:
-        """Not used for markdown backend — each operation writes directly."""
-        pass
 
     def get_experiences(self) -> list[dict[str, Any]]:
         """List all experiences with summary info."""
@@ -90,18 +74,24 @@ class MarkdownStorage(StorageBackend):
             post = frontmatter.load(str(path))
             meta = dict(post.metadata)
             # count bullets belonging to this experience
-            exp_id = meta.get("id", path.stem)
-            bullet_count = sum(
-                1
-                for bp in self.materials_dir.glob("*.md")
-                if frontmatter.load(str(bp)).metadata.get("exp_id") == exp_id
-            )
+            exp_id = meta.get("id")
+            project_name = meta.get("project_name")
+            direction = meta.get("direction")
+
+            if project_name and direction:
+                bullet_dir = self.materials_dir / f"{project_name}-{direction}"
+                bullet_count = sum(1 for _ in bullet_dir.glob("*.md")) if bullet_dir.exists() else 0
+            else:
+                bullet_count = 0
+
             meta["bullet_count"] = bullet_count
             results.append(meta)
         return results
 
     def create_experience(
         self,
+        project_name: str,
+        direction: str,
         organization: str,
         role: str,
         start: str,
@@ -114,8 +104,13 @@ class MarkdownStorage(StorageBackend):
         exp_id = self._new_id("exp")
         now = self._now()
 
+        # filename: {project_name}-{direction}.md
+        file_prefix = f"{project_name}-{direction}"
+
         meta: dict[str, Any] = {
             "id": exp_id,
+            "project_name": project_name,
+            "direction": direction,
             "organization": organization,
             "role": role,
             "start": start,
@@ -129,7 +124,7 @@ class MarkdownStorage(StorageBackend):
         }
 
         post = frontmatter.Post(EXPERIENCE_TEMPLATE, **meta)
-        path = self.experiences_dir / f"{exp_id}.md"
+        path = self.experiences_dir / f"{file_prefix}.md"
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return exp_id
@@ -137,6 +132,7 @@ class MarkdownStorage(StorageBackend):
     def log_bullet(
         self,
         exp_id: str,
+        bullet_name: str,
         raw: str,
         rewritten: str,
         skill_tags: list[str] | None = None,
@@ -145,10 +141,15 @@ class MarkdownStorage(StorageBackend):
         has_number: bool = False,
         metric_values: list[str] | None = None,
     ) -> str:
-        # verify experience exists
-        matching = list(self.experiences_dir.glob(f"{exp_id}.md"))
-        if not matching:
-            raise ValueError(f"Experience {exp_id} not found")
+        exp_post = self._find_by_id(self.experiences_dir, exp_id)
+
+        project_name = exp_post.metadata.get("project_name")
+        direction = exp_post.metadata.get("direction")
+        file_prefix = f"{project_name}-{direction}"
+
+        # create bullet folder if not exists
+        bullet_dir = self.materials_dir / file_prefix
+        bullet_dir.mkdir(parents=True, exist_ok=True)
 
         bullet_id = self._new_id("bul")
         now = self._now()
@@ -166,7 +167,7 @@ class MarkdownStorage(StorageBackend):
 
         body = BULLET_TEMPLATE.format(raw=raw, rewritten=rewritten)
         post = frontmatter.Post(body, **meta)
-        path = self.materials_dir / f"{bullet_id}.md"
+        path = bullet_dir / f"{bullet_name}.md"
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return bullet_id
@@ -179,13 +180,36 @@ class MarkdownStorage(StorageBackend):
         bullet_ids: list[str],
         content: str,
     ) -> str:
+        # find project_name from first bullet
+        project_name = None
+        if bullet_ids:
+            first_bullet_id = bullet_ids[0]
+            for exp_path in self.experiences_dir.glob("*.md"):
+                exp_post = frontmatter.load(str(exp_path))
+                exp_id = exp_post.metadata.get("id")
+                if exp_id:
+                    bullet_dir = self.materials_dir / f"{exp_post.metadata.get('project_name')}-{exp_post.metadata.get('direction')}"
+                    if bullet_dir.exists():
+                        for bullet_path in bullet_dir.glob("*.md"):
+                            bullet_post = frontmatter.load(str(bullet_path))
+                            if bullet_post.metadata.get("id") == first_bullet_id:
+                                project_name = exp_post.metadata.get("project_name")
+                                break
+                if project_name:
+                    break
+
+        if not project_name:
+            raise ValueError("Cannot determine project_name from bullet_ids")
+
         resume_id = self._new_id("res")
         now = self._now()
+        file_name = f"{project_name}-{direction}-base"
 
         meta: dict[str, Any] = {
             "id": resume_id,
-            "name": f"{direction}-base",
+            "name": file_name,
             "direction": direction,
+            "project_name": project_name,
             "is_base": True,
             "base_id": None,
             "jd": None,
@@ -197,7 +221,7 @@ class MarkdownStorage(StorageBackend):
 
         body = RESUME_TEMPLATE.format(content=content)
         post = frontmatter.Post(body, **meta)
-        path = self.resumes_dir / f"{resume_id}.md"
+        path = self.resumes_dir / f"{file_name}.md"
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return resume_id
@@ -210,12 +234,8 @@ class MarkdownStorage(StorageBackend):
         bullet_ids: list[str],
         content: str,
     ) -> str:
-        # load base to compute diff
-        base_path = self.resumes_dir / f"{base_id}.md"
-        if not base_path.exists():
-            raise ValueError(f"Base resume {base_id} not found")
+        base_post = self._find_by_id(self.resumes_dir, base_id)
 
-        base_post = frontmatter.load(str(base_path))
         base_bullet_ids = set(base_post.metadata.get("bullet_ids", []))
         current_ids = set(bullet_ids)
 
@@ -227,11 +247,15 @@ class MarkdownStorage(StorageBackend):
 
         resume_id = self._new_id("res")
         now = self._now()
+        project_name = base_post.metadata.get("project_name", "")
+        direction = base_post.metadata.get("direction", "")
+        file_name = f"{project_name}-{direction}-{name}"
 
         meta: dict[str, Any] = {
             "id": resume_id,
             "name": name,
-            "direction": base_post.metadata.get("direction", ""),
+            "project_name": project_name,
+            "direction": direction,
             "is_base": False,
             "base_id": base_id,
             "jd": jd,
@@ -243,7 +267,7 @@ class MarkdownStorage(StorageBackend):
 
         body = RESUME_TEMPLATE.format(content=content)
         post = frontmatter.Post(body, **meta)
-        path = self.resumes_dir / f"{resume_id}.md"
+        path = self.resumes_dir / f"{file_name}.md"
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return resume_id
@@ -265,8 +289,5 @@ class MarkdownStorage(StorageBackend):
         return results
 
     def get_resume(self, resume_id: str) -> dict[str, Any]:
-        path = self.resumes_dir / f"{resume_id}.md"
-        if not path.exists():
-            raise ValueError(f"Resume {resume_id} not found")
-        post = frontmatter.load(str(path))
+        post = self._find_by_id(self.resumes_dir, resume_id)
         return {**post.metadata, "content": post.content}
