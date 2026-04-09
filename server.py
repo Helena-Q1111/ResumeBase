@@ -3,20 +3,31 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
 import yaml
 from mcp.server.fastmcp import FastMCP
+from platformdirs import user_config_dir, user_data_dir, user_log_dir
 
 from prompts.templates import LOGGING_SYSTEM_PROMPT, RESUME_AGENT_GUIDELINE
 from storage import create_backend
+
+APP_NAME = "resume-agent"
+SOURCE_DIR = Path(__file__).resolve().parent
+
+CONFIG_DIR = Path(user_config_dir(APP_NAME, ensure_exists=True))
+DATA_DIR = Path(user_data_dir(APP_NAME, ensure_exists=True))
+LOG_DIR = Path(user_log_dir(APP_NAME, ensure_exists=True))
+
+CONFIG_PATH = CONFIG_DIR / "config.yaml"
 
 # ── logging setup ───────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
-    filename="server.log",
+    filename=str(LOG_DIR / "server.log"),
     format="%(asctime)s %(levelname)s %(message)s"
 )
 logger = logging.getLogger(__name__)
@@ -25,16 +36,19 @@ logger = logging.getLogger(__name__)
 
 _lock = asyncio.Lock()
 
-BASE_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = BASE_DIR / "config.yaml"
-
 
 def load_config() -> dict[str, Any]:
     if not CONFIG_PATH.exists():
-        logger.error("config.yaml not found")
-        raise FileNotFoundError(
-            "config.yaml not found. Copy config.example.yaml to config.yaml first."
-        )
+        # 首次运行，从源码目录复制默认配置
+        example = SOURCE_DIR / "config.example.yaml"
+        if example.exists():
+            shutil.copy(example, CONFIG_PATH)
+            logger.info(f"Created default config at {CONFIG_PATH}")
+        else:
+            raise FileNotFoundError(
+                f"config.yaml not found at {CONFIG_PATH} "
+                f"and no config.example.yaml in {SOURCE_DIR}"
+            )
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
@@ -60,8 +74,15 @@ async def _with_lock(tool_name: str, func, *args, **kwargs):
 
 config = load_config()
 
-vault_path = config.get("storage", {}).get("vault_path", "./data")
-config.setdefault("storage", {})["vault_path"] = str((BASE_DIR / vault_path).resolve())
+vault_path = config.get("storage", {}).get("vault_path", "")
+if vault_path:
+    vault = Path(vault_path)
+    # 绝对路径直接用，相对路径基于 DATA_DIR 解析
+    if not vault.is_absolute():
+        vault = DATA_DIR / vault
+else:
+    vault = DATA_DIR / "data"
+config.setdefault("storage", {})["vault_path"] = str(vault)
 
 backend = create_backend(config)
 
