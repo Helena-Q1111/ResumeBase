@@ -11,7 +11,15 @@ import yaml
 from mcp.server.fastmcp import FastMCP
 from platformdirs import user_config_dir, user_data_dir, user_log_dir
 
-from prompts.templates import LOGGING_SYSTEM_PROMPT, RESUME_AGENT_GUIDELINE
+from prompts import (
+    SYSTEM_PROMPT,
+    INIT_PROMPT,
+    LOG_PROMPT,
+    RESUME_PROMPT,
+    TAILOR_PROMPT,
+    UPDATE_PROMPT,
+    HELP_PROMPT,
+)
 from storage import create_backend
 
 APP_NAME = "resume-agent"
@@ -208,16 +216,34 @@ async def get_resume(resume_id: str) -> str:
 # ── prompts ─────────────────────────────────────────────────────────
 
 
+@mcp.prompt(name="init")
+def init_prompt() -> str:
+    return SYSTEM_PROMPT + "\n\n" + INIT_PROMPT
+
+
 @mcp.prompt(name="log")
 def log_prompt() -> str:
-    """Prompt invoked by /log in Claude Desktop."""
-    return LOGGING_SYSTEM_PROMPT
+    return SYSTEM_PROMPT + "\n\n" + LOG_PROMPT
+
+
+@mcp.prompt(name="resume")
+def resume_prompt() -> str:
+    return SYSTEM_PROMPT + "\n\n" + RESUME_PROMPT
+
+
+@mcp.prompt(name="tailor")
+def tailor_prompt() -> str:
+    return SYSTEM_PROMPT + "\n\n" + TAILOR_PROMPT
+
+
+@mcp.prompt(name="update")
+def update_prompt() -> str:
+    return SYSTEM_PROMPT + "\n\n" + UPDATE_PROMPT
 
 
 @mcp.prompt(name="help")
 def help_prompt() -> str:
-    """Prompt invoked by /help in Claude Desktop."""
-    return RESUME_AGENT_GUIDELINE
+    return HELP_PROMPT
 
 
 if __name__ == "__main__":
