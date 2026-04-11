@@ -33,13 +33,17 @@ class StorageBackend(ABC):
         exp_id: str,
         bullet_name: str,
         raw: str,
-        rewritten: str,
+        rewritten: dict[str, str],
         skill_tags: list[str] | None = None,
         tool_tags: list[str] | None = None,
         category: str = "achievement",
         has_number: bool = False,
         metric_values: list[str] | None = None,
     ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_bullets(self, exp_id: str) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     # ── resume version management ──────────────────────────────────
@@ -50,6 +54,7 @@ class StorageBackend(ABC):
         direction: str,
         bullet_ids: list[str],
         content: str,
+        language: str | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -61,6 +66,7 @@ class StorageBackend(ABC):
         jd: dict[str, Any],
         bullet_ids: list[str],
         content: str,
+        language: str | None = None,
     ) -> str:
         raise NotImplementedError
 

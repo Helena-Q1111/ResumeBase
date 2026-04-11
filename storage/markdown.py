@@ -31,6 +31,23 @@ BULLET_TEMPLATE = """\
 ## 待补充
 """
 
+LANGUAGE_LABELS = {
+    "en": "English",
+    "zh": "中文",
+    "ja": "日本語",
+}
+
+
+def _format_rewritten(rewritten: dict[str, str]) -> str:
+    """Render multilingual rewritten dict into a readable Markdown block."""
+    if len(rewritten) == 1:
+        return next(iter(rewritten.values()))
+    lines = []
+    for lang, text in rewritten.items():
+        label = LANGUAGE_LABELS.get(lang, lang.upper())
+        lines.append(f"**{label}:** {text}")
+    return "\n\n".join(lines)
+
 RESUME_TEMPLATE = """\
 ## 简历正文
 {content}
@@ -134,13 +151,16 @@ class MarkdownStorage(StorageBackend):
         exp_id: str,
         bullet_name: str,
         raw: str,
-        rewritten: str,
+        rewritten: dict[str, str],
         skill_tags: list[str] | None = None,
         tool_tags: list[str] | None = None,
         category: str = "achievement",
         has_number: bool = False,
         metric_values: list[str] | None = None,
     ) -> str:
+        if not rewritten:
+            raise ValueError("rewritten must contain at least one language")
+
         exp_post = self._find_by_id(self.experiences_dir, exp_id)
 
         project_name = exp_post.metadata.get("project_name")
@@ -158,6 +178,8 @@ class MarkdownStorage(StorageBackend):
             "id": bullet_id,
             "exp_id": exp_id,
             "category": category,
+            "languages": list(rewritten.keys()),
+            "rewritten": dict(rewritten),
             "skill_tags": skill_tags or [],
             "tool_tags": tool_tags or [],
             "has_number": has_number,
@@ -165,12 +187,40 @@ class MarkdownStorage(StorageBackend):
             "created_at": now,
         }
 
-        body = BULLET_TEMPLATE.format(raw=raw, rewritten=rewritten)
+        body = BULLET_TEMPLATE.format(raw=raw, rewritten=_format_rewritten(rewritten))
         post = frontmatter.Post(body, **meta)
         path = bullet_dir / f"{bullet_name}.md"
         path.write_text(frontmatter.dumps(post), encoding="utf-8")
 
         return bullet_id
+
+    def list_bullets(self, exp_id: str) -> list[dict[str, Any]]:
+        """List all bullets under an experience."""
+        exp_post = self._find_by_id(self.experiences_dir, exp_id)
+        project_name = exp_post.metadata.get("project_name")
+        direction = exp_post.metadata.get("direction")
+        bullet_dir = self.materials_dir / f"{project_name}-{direction}"
+
+        results: list[dict[str, Any]] = []
+        if not bullet_dir.exists():
+            return results
+
+        for path in sorted(bullet_dir.glob("*.md")):
+            post = frontmatter.load(str(path))
+            meta = dict(post.metadata)
+            results.append({
+                "id": meta.get("id"),
+                "bullet_name": path.stem,
+                "category": meta.get("category"),
+                "languages": meta.get("languages", []),
+                "rewritten": meta.get("rewritten", {}),
+                "skill_tags": meta.get("skill_tags", []),
+                "tool_tags": meta.get("tool_tags", []),
+                "has_number": meta.get("has_number", False),
+                "metric_values": meta.get("metric_values", []),
+                "content": post.content,
+            })
+        return results
 
     # ── resume version management ──────────────────────────────────
 
@@ -179,6 +229,7 @@ class MarkdownStorage(StorageBackend):
         direction: str,
         bullet_ids: list[str],
         content: str,
+        language: str | None = None,
     ) -> str:
         # find project_name from first bullet
         project_name = None
@@ -203,13 +254,15 @@ class MarkdownStorage(StorageBackend):
 
         resume_id = self._new_id("res")
         now = self._now()
-        file_name = f"{project_name}-{direction}-base"
+        suffix = f"-{language}" if language else ""
+        file_name = f"{project_name}-{direction}-base{suffix}"
 
         meta: dict[str, Any] = {
             "id": resume_id,
             "name": file_name,
             "direction": direction,
             "project_name": project_name,
+            "language": language,
             "is_base": True,
             "base_id": None,
             "jd": None,
@@ -233,6 +286,7 @@ class MarkdownStorage(StorageBackend):
         jd: dict[str, Any],
         bullet_ids: list[str],
         content: str,
+        language: str | None = None,
     ) -> str:
         base_post = self._find_by_id(self.resumes_dir, base_id)
 
@@ -249,13 +303,17 @@ class MarkdownStorage(StorageBackend):
         now = self._now()
         project_name = base_post.metadata.get("project_name", "")
         direction = base_post.metadata.get("direction", "")
-        file_name = f"{project_name}-{direction}-{name}"
+        # 默认沿用 base 的语言；显式传入 language 则覆盖
+        effective_lang = language if language is not None else base_post.metadata.get("language")
+        suffix = f"-{effective_lang}" if effective_lang else ""
+        file_name = f"{project_name}-{direction}-{name}{suffix}"
 
         meta: dict[str, Any] = {
             "id": resume_id,
             "name": name,
             "project_name": project_name,
             "direction": direction,
+            "language": effective_lang,
             "is_base": False,
             "base_id": base_id,
             "jd": jd,
@@ -283,6 +341,7 @@ class MarkdownStorage(StorageBackend):
                 "id": meta.get("id"),
                 "name": meta.get("name"),
                 "direction": meta.get("direction"),
+                "language": meta.get("language"),
                 "is_base": meta.get("is_base"),
                 "created_at": meta.get("created_at"),
             })

@@ -141,7 +141,7 @@ async def log_bullet(
     exp_id: str,
     bullet_name: str,
     raw: str,
-    rewritten: str,
+    rewritten: dict[str, str],
     skill_tags: list[str] | None = None,
     tool_tags: list[str] | None = None,
     category: str = "achievement",
@@ -164,10 +164,19 @@ async def log_bullet(
 
 
 @mcp.tool()
+async def list_bullets(exp_id: str) -> str:
+    return await _with_lock(
+        "list_bullets",
+        lambda: json.dumps(backend.list_bullets(exp_id), ensure_ascii=False),
+    )
+
+
+@mcp.tool()
 async def create_base_resume(
     direction: str,
     bullet_ids: list[str],
     content: str,
+    language: str | None = None,
 ) -> str:
     return await _with_lock(
         "create_base_resume",
@@ -175,6 +184,7 @@ async def create_base_resume(
         direction=direction,
         bullet_ids=bullet_ids,
         content=content,
+        language=language,
     )
 
 
@@ -185,6 +195,7 @@ async def create_resume_version(
     jd: dict[str, Any],
     bullet_ids: list[str],
     content: str,
+    language: str | None = None,
 ) -> str:
     return await _with_lock(
         "create_resume_version",
@@ -194,6 +205,7 @@ async def create_resume_version(
         jd=jd,
         bullet_ids=bullet_ids,
         content=content,
+        language=language,
     )
 
 
