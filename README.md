@@ -2,8 +2,6 @@
 
 An MCP (Model Context Protocol) server that acts as an AI-powered resume material manager. It helps users systematically collect, organize, and reuse their professional experiences and achievements to generate tailored resumes.
 
-**Repo:** [github.com/Helena-Q1111/ResumeBase](https://github.com/Helena-Q1111/ResumeBase)
-
 ## What It Does
 
 Job seekers often struggle to recall and articulate their accomplishments when writing resumes, especially when tailoring them for different positions. ResumeBase solves this by providing a structured workflow:
