@@ -15,18 +15,49 @@ All data is stored as **Markdown files with YAML frontmatter**, making it human-
 
 ## Architecture
 
-ResumeBase is built as an **MCP server** using the [FastMCP](https://github.com/jlowin/fastmcp) framework. It exposes tools and prompts that any MCP-compatible AI client (e.g., Claude Desktop) can call:
-
-- **Tools** — `create_experience`, `log_bullet`, `list_bullets`, `create_base_resume`, `create_resume_version`, `list_resumes`, `get_resume`, `get_experiences`
-- **Prompts** — `/init`, `/log`, `/resume`, `/tailor`, `/update`, `/help` — each guides the AI through a specific workflow step
-- **Storage** — A pluggable backend (currently Markdown-based) that persists everything to local files
+ResumeBase is a layered system built on [FastMCP](https://github.com/jlowin/fastmcp): **prompts** drive workflows, **tools** read and write data, **storage** persists everything as files.
 
 ```
-server.py          — MCP server entry point, tool/prompt registration
-prompts/           — Prompt templates for each workflow command
-storage/base.py    — Abstract storage interface
-storage/markdown.py — Markdown + frontmatter implementation
-config.example.yaml — Default configuration
+MCP Client  (Claude Desktop / Codex / Gemini CLI / Cursor / ...)
+     │  stdio + MCP protocol
+     ▼
+┌──────────────────────────────────────────────────┐
+│  server.py  (FastMCP)                            │
+│                                                  │
+│   Prompts  ──invoke──►  Tools                    │
+│   (workflow             (data ops, contract-only)│
+│    scripts)                  │                   │
+│                              ▼                   │
+│                       Storage backend            │
+│                       (pluggable; Markdown today)│
+└──────────────────────────────────────────────────┘
+```
+
+### Three layers
+
+- **Prompts** ([prompts/](prompts/)) — workflow scripts loaded when the user invokes a slash command; they tell the LLM what to ask the user and which tools to call.
+- **Tools** (`@mcp.tool()` in [server.py](server.py)) — the data-operation API the LLM calls to read or write resume material.
+- **Storage** ([storage/](storage/)) — pluggable backend behind a `StorageBackend` interface; the default writes Markdown + YAML frontmatter to local files.
+
+### Workflows
+
+| Slash command | Tools used | What it does |
+| --- | --- | --- |
+| `/init`    | `create_experience` | Create a new experience entry (project / job / internship / research) |
+| `/log`     | `get_experiences`, `log_bullet` | Log a polished achievement bullet under an existing experience |
+| `/resume`  | `get_experiences`, `list_bullets`, `create_base_resume` | Compose a base resume for a career direction |
+| `/tailor`  | `list_resumes`, `get_resume`, `create_resume_version` | Generate a JD-tailored version from a base resume |
+| `/update`  | (varies) | Edit existing experiences or bullets |
+| `/help`    | —                                                       | Show available commands |
+
+### File layout
+
+```
+server.py            — MCP server entry; tool & prompt registration
+prompts/             — Workflow scripts (one file per slash command)
+storage/base.py      — Abstract StorageBackend interface
+storage/markdown.py  — Markdown + YAML frontmatter implementation
+config.example.yaml  — Default config; copied to user-config dir on first run
 ```
 
 ## Quickstart
@@ -149,16 +180,9 @@ storage:
 
 Relative paths are resolved against the user-data directory above.
 
-### 5. Typical workflow
+### 5. Next
 
-| Command   | What it does                                                  |
-| --------- | ------------------------------------------------------------- |
-| `/init`   | Set up your profile and create your first experience entry   |
-| `/log`    | Add achievement bullets to an existing experience            |
-| `/resume` | Compose a base resume for a career direction                 |
-| `/tailor` | Generate a JD-tailored version of a base resume              |
-| `/update` | Edit existing experiences or bullets                         |
-| `/help`   | Show available commands                                      |
+Run `/init` to create your first experience, then `/log` to add bullets. See [Architecture → Workflows](#workflows) for the full command list and what each one does.
 
 ## License
 
