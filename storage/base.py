@@ -46,6 +46,36 @@ class StorageBackend(ABC):
     def list_bullets(self, exp_id: str) -> list[dict[str, Any]]:
         raise NotImplementedError
 
+    @abstractmethod
+    def update_experience(
+        self,
+        exp_id: str,
+        organization: str | None = None,
+        role: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        exp_type: str | None = None,
+        direction_tags: list[str] | None = None,
+        skill_tags: list[str] | None = None,
+        tool_tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_bullet(
+        self,
+        bullet_id: str,
+        bullet_name: str | None = None,
+        raw: str | None = None,
+        rewritten: dict[str, str] | None = None,
+        skill_tags: list[str] | None = None,
+        tool_tags: list[str] | None = None,
+        category: str | None = None,
+        has_number: bool | None = None,
+        metric_values: list[str] | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
     # ── resume version management ──────────────────────────────────
 
     @abstractmethod

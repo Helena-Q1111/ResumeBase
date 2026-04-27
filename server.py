@@ -215,8 +215,8 @@ async def log_bullet(
         The new bullet's id (string, prefix "bul-").
 
     Raises:
-        ValueError: if `rewritten` is empty.
-        FileNotFoundError: if `exp_id` does not match any experience.
+        ValueError: if `rewritten` is empty, or if `exp_id` does not match
+            any experience.
     """
     return await _with_lock(
         "log_bullet",
@@ -251,11 +251,133 @@ async def list_bullets(exp_id: str) -> str:
         body (`content`). Empty list if the experience has no bullets yet.
 
     Raises:
-        FileNotFoundError: if `exp_id` does not match any experience.
+        ValueError: if `exp_id` does not match any experience.
     """
     return await _with_lock(
         "list_bullets",
         lambda: json.dumps(backend.list_bullets(exp_id), ensure_ascii=False),
+    )
+
+
+@mcp.tool()
+async def update_experience(
+    exp_id: str,
+    organization: str | None = None,
+    role: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    exp_type: str | None = None,
+    direction_tags: list[str] | None = None,
+    skill_tags: list[str] | None = None,
+    tool_tags: list[str] | None = None,
+) -> str:
+    """Modify metadata fields on an existing experience.
+
+    Partial update: pass only the fields the user wants to change. Omitted
+    or None fields are left as-is. Tag lists fully replace the stored list
+    (this is not an append operation).
+
+    Note: `project_name` and `direction` are intentionally not editable in
+    this version — they form the filename and bullet parent path. To change
+    them, recreate the experience.
+
+    Args:
+        exp_id: ID of the experience. Must come from get_experiences().
+        organization: New organization / company name. Optional.
+        role: New job title or role name. Optional.
+        start: New start date in `YYYY-MM` format. Optional.
+        end: New end date in `YYYY-MM` format, or "" for ongoing. Optional.
+        exp_type: One of "internship", "fulltime", "project", "research".
+            Optional.
+        direction_tags: Replacement direction tags (full list). Optional.
+        skill_tags: Replacement skill tags (full list). Optional.
+        tool_tags: Replacement tool tags (full list). Optional.
+
+    Returns:
+        JSON string of the updated experience metadata.
+
+    Raises:
+        ValueError: if `exp_id` does not match any experience.
+    """
+    return await _with_lock(
+        "update_experience",
+        lambda: json.dumps(
+            backend.update_experience(
+                exp_id=exp_id,
+                organization=organization,
+                role=role,
+                start=start,
+                end=end,
+                exp_type=exp_type,
+                direction_tags=direction_tags,
+                skill_tags=skill_tags,
+                tool_tags=tool_tags,
+            ),
+            ensure_ascii=False,
+        ),
+    )
+
+
+@mcp.tool()
+async def update_bullet(
+    bullet_id: str,
+    bullet_name: str | None = None,
+    raw: str | None = None,
+    rewritten: dict[str, str] | None = None,
+    skill_tags: list[str] | None = None,
+    tool_tags: list[str] | None = None,
+    category: str | None = None,
+    has_number: bool | None = None,
+    metric_values: list[str] | None = None,
+) -> str:
+    """Modify fields on an existing bullet.
+
+    Partial update: pass only the fields the user wants to change. Omitted
+    or None fields are left as-is. Tag lists fully replace the stored list.
+    Cannot reassign a bullet to a different experience — `exp_id` is fixed.
+
+    If `raw` or `rewritten` change, the markdown body is regenerated to stay
+    in sync with the new metadata; user-added notes in body sections may be
+    lost.
+
+    Args:
+        bullet_id: ID of the bullet. Must come from list_bullets().
+        bullet_name: New filename tag (no path separators). Renames the
+            underlying .md file. Optional.
+        raw: Replacement raw description (stored verbatim). Optional.
+        rewritten: Replacement polished text dict, keyed by ISO 639-1
+            language code. Must be non-empty if provided. Optional.
+        skill_tags: Replacement skill tags. Optional.
+        tool_tags: Replacement tool tags. Optional.
+        category: One of "achievement", "skill", "responsibility". Optional.
+        has_number: True iff `rewritten` contains quantitative metrics.
+            Optional.
+        metric_values: Replacement metric strings. Optional.
+
+    Returns:
+        JSON string of the updated bullet metadata, including a
+        `bullet_name` field reflecting any rename.
+
+    Raises:
+        ValueError: if `bullet_id` does not match any bullet, or if
+            `rewritten` is provided but empty.
+    """
+    return await _with_lock(
+        "update_bullet",
+        lambda: json.dumps(
+            backend.update_bullet(
+                bullet_id=bullet_id,
+                bullet_name=bullet_name,
+                raw=raw,
+                rewritten=rewritten,
+                skill_tags=skill_tags,
+                tool_tags=tool_tags,
+                category=category,
+                has_number=has_number,
+                metric_values=metric_values,
+            ),
+            ensure_ascii=False,
+        ),
     )
 
 
@@ -333,7 +455,7 @@ async def create_resume_version(
         The new version's id (string, prefix "res-").
 
     Raises:
-        FileNotFoundError: if `base_id` does not match any resume.
+        ValueError: if `base_id` does not match any resume.
     """
     return await _with_lock(
         "create_resume_version",
@@ -387,7 +509,7 @@ async def get_resume(resume_id: str) -> str:
         a `content` field.
 
     Raises:
-        FileNotFoundError: if `resume_id` does not match any resume.
+        ValueError: if `resume_id` does not match any resume.
     """
     return await _with_lock(
         "get_resume",

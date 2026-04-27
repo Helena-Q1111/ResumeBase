@@ -82,6 +82,22 @@ class MarkdownStorage(StorageBackend):
                 return post
         raise ValueError(f"ID {target_id} not found in {directory.name}")
 
+    def _find_path_by_id(self, directory: Path, target_id: str) -> tuple[Path, frontmatter.Post]:
+        """Locate a markdown file by frontmatter id; return (path, post)."""
+        for path in directory.glob("*.md"):
+            post = frontmatter.load(str(path))
+            if post.metadata.get("id") == target_id:
+                return path, post
+        raise ValueError(f"ID {target_id} not found in {directory.name}")
+
+    def _find_bullet_path_by_id(self, bullet_id: str) -> tuple[Path, frontmatter.Post]:
+        """Locate a bullet by id across all material subdirectories."""
+        for path in self.materials_dir.glob("*/*.md"):
+            post = frontmatter.load(str(path))
+            if post.metadata.get("id") == bullet_id:
+                return path, post
+        raise ValueError(f"Bullet ID {bullet_id} not found")
+
     # ── StorageBackend interface ────────────────────────────────────
 
     def get_experiences(self) -> list[dict[str, Any]]:
@@ -179,6 +195,7 @@ class MarkdownStorage(StorageBackend):
             "exp_id": exp_id,
             "category": category,
             "languages": list(rewritten.keys()),
+            "raw": raw,
             "rewritten": dict(rewritten),
             "skill_tags": skill_tags or [],
             "tool_tags": tool_tags or [],
@@ -221,6 +238,105 @@ class MarkdownStorage(StorageBackend):
                 "content": post.content,
             })
         return results
+
+    # ── partial updates ────────────────────────────────────────────
+
+    def update_experience(
+        self,
+        exp_id: str,
+        organization: str | None = None,
+        role: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        exp_type: str | None = None,
+        direction_tags: list[str] | None = None,
+        skill_tags: list[str] | None = None,
+        tool_tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        path, post = self._find_path_by_id(self.experiences_dir, exp_id)
+        meta = dict(post.metadata)
+
+        if organization is not None:
+            meta["organization"] = organization
+        if role is not None:
+            meta["role"] = role
+        if start is not None:
+            meta["start"] = start
+        if end is not None:
+            meta["end"] = end
+        if exp_type is not None:
+            meta["type"] = exp_type
+        if direction_tags is not None:
+            meta["direction_tags"] = direction_tags
+        if skill_tags is not None:
+            meta["skill_tags"] = skill_tags
+        if tool_tags is not None:
+            meta["tool_tags"] = tool_tags
+
+        meta["updated_at"] = self._now()
+
+        new_post = frontmatter.Post(post.content, **meta)
+        path.write_text(frontmatter.dumps(new_post), encoding="utf-8")
+        return meta
+
+    def update_bullet(
+        self,
+        bullet_id: str,
+        bullet_name: str | None = None,
+        raw: str | None = None,
+        rewritten: dict[str, str] | None = None,
+        skill_tags: list[str] | None = None,
+        tool_tags: list[str] | None = None,
+        category: str | None = None,
+        has_number: bool | None = None,
+        metric_values: list[str] | None = None,
+    ) -> dict[str, Any]:
+        if rewritten is not None and not rewritten:
+            raise ValueError("rewritten must contain at least one language")
+
+        path, post = self._find_bullet_path_by_id(bullet_id)
+        meta = dict(post.metadata)
+
+        if raw is not None:
+            meta["raw"] = raw
+        if rewritten is not None:
+            meta["rewritten"] = dict(rewritten)
+            meta["languages"] = list(rewritten.keys())
+        if skill_tags is not None:
+            meta["skill_tags"] = skill_tags
+        if tool_tags is not None:
+            meta["tool_tags"] = tool_tags
+        if category is not None:
+            meta["category"] = category
+        if has_number is not None:
+            meta["has_number"] = has_number
+        if metric_values is not None:
+            meta["metric_values"] = metric_values
+
+        meta["updated_at"] = self._now()
+
+        # Regenerate body if raw or rewritten changed (keeps body in sync with meta)
+        if raw is not None or rewritten is not None:
+            body = BULLET_TEMPLATE.format(
+                raw=meta.get("raw", ""),
+                rewritten=_format_rewritten(meta.get("rewritten", {})),
+            )
+        else:
+            body = post.content
+
+        new_post = frontmatter.Post(body, **meta)
+
+        # Handle filename rename
+        if bullet_name is not None and bullet_name != path.stem:
+            new_path = path.parent / f"{bullet_name}.md"
+            new_path.write_text(frontmatter.dumps(new_post), encoding="utf-8")
+            path.unlink()
+            path = new_path
+        else:
+            path.write_text(frontmatter.dumps(new_post), encoding="utf-8")
+
+        meta["bullet_name"] = path.stem
+        return meta
 
     # ── resume version management ──────────────────────────────────
 

@@ -47,8 +47,13 @@ MCP Client  (Claude Desktop / Codex / Gemini CLI / Cursor / ...)
 | `/log`     | `get_experiences`, `log_bullet` | Log a polished achievement bullet under an existing experience |
 | `/resume`  | `get_experiences`, `list_bullets`, `create_base_resume` | Compose a base resume for a career direction |
 | `/tailor`  | `list_resumes`, `get_resume`, `create_resume_version` | Generate a JD-tailored version from a base resume |
-| `/update`  | (varies) | Edit existing experiences or bullets |
+| `/update`  | `get_experiences`, `list_bullets`, `update_experience`, `update_bullet` | Edit existing experiences or bullets (partial update) |
 | `/help`    | —                                                       | Show available commands |
+
+> **`/update` v1 limitations**
+> - Cannot change an experience's `project_name` or `direction` — they form the filename and the bullet parent path. To rename, recreate the experience.
+> - Cannot move a bullet to a different experience (`exp_id` is fixed).
+> - Tag fields (`*_tags`, `metric_values`) are replaced wholesale, not appended.
 
 ### File layout
 
