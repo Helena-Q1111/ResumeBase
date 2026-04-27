@@ -31,19 +31,137 @@ storage/markdown.py — Markdown + frontmatter implementation
 config.example.yaml — Default configuration
 ```
 
-## Setup
+## Quickstart
+
+### 1. Requirements
+
+- Python 3.10+
+- An MCP-compatible client (e.g. [Claude Desktop](https://claude.ai/download), Claude Code)
+
+### 2. Install
 
 ```bash
+git clone https://github.com/Helena-Q1111/ResumeBase.git
+cd ResumeBase
 pip install -r requirements.txt
-python server.py
 ```
 
-Configure storage path in `config.yaml` (auto-created on first run from `config.example.yaml`).
+### 3. Connect to your MCP client
 
-## Current Status & Remaining Work
+ResumeBase runs as a local stdio MCP server — your client launches `server.py` on demand, you don't start it manually. **Each MCP client keeps its own server list**, so add ResumeBase to whichever client(s) you want to use it from. The same `server.py` works for all of them.
 
-The core functionality is complete. Remaining work for the final milestone:
+Replace `/absolute/path/to/ResumeBase/server.py` in the snippets below with the actual path on your machine.
 
-- **Documentation** — Expand usage guides and add examples
-- **Bug fixes** — Address edge cases in bullet/resume management
-- **`/update` command** — Finish the experience update workflow
+<details open>
+<summary><b>Claude Desktop</b></summary>
+
+Settings → Developer → Edit Config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "resume-agent": {
+      "command": "python",
+      "args": ["/absolute/path/to/ResumeBase/server.py"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add resume-agent -- python /absolute/path/to/ResumeBase/server.py
+```
+</details>
+
+<details>
+<summary><b>Codex CLI</b></summary>
+
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.resume-agent]
+command = "python"
+args = ["/absolute/path/to/ResumeBase/server.py"]
+```
+</details>
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+Edit `~/.gemini/settings.json` (user scope) or `.gemini/settings.json` (project scope):
+
+```json
+{
+  "mcpServers": {
+    "resume-agent": {
+      "command": "python",
+      "args": ["/absolute/path/to/ResumeBase/server.py"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Create `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project):
+
+```json
+{
+  "mcpServers": {
+    "resume-agent": {
+      "command": "python",
+      "args": ["/absolute/path/to/ResumeBase/server.py"]
+    }
+  }
+}
+```
+</details>
+
+Restart the client after editing. You should see `/init`, `/log`, `/resume`, `/tailor`, `/update`, `/help` in the slash-command list.
+
+> **Tip:** if `python` isn't on your PATH or you use a virtualenv, replace `"python"` with the absolute path to the interpreter (e.g. `/Users/you/.venv/bin/python`).
+
+### 4. First run
+
+In your MCP client, run `/init` to start. The server will:
+
+- Create `config.yaml` at the OS user-config path on first launch:
+  - macOS: `~/Library/Application Support/resume-agent/config.yaml`
+  - Linux: `~/.config/resume-agent/config.yaml`
+  - Windows: `%APPDATA%\resume-agent\config.yaml`
+- Store your resume data under the OS user-data path by default:
+  - macOS: `~/Library/Application Support/resume-agent/data/`
+  - Linux: `~/.local/share/resume-agent/data/`
+  - Windows: `%LOCALAPPDATA%\resume-agent\data\`
+- Write logs to the OS user-log path (`server.log`).
+
+To use a custom location (e.g. an Obsidian vault), edit `config.yaml`:
+
+```yaml
+storage:
+  backend: markdown
+  vault_path: /Users/you/Documents/MyVault/Resume   # absolute path
+```
+
+Relative paths are resolved against the user-data directory above.
+
+### 5. Typical workflow
+
+| Command   | What it does                                                  |
+| --------- | ------------------------------------------------------------- |
+| `/init`   | Set up your profile and create your first experience entry   |
+| `/log`    | Add achievement bullets to an existing experience            |
+| `/resume` | Compose a base resume for a career direction                 |
+| `/tailor` | Generate a JD-tailored version of a base resume              |
+| `/update` | Edit existing experiences or bullets                         |
+| `/help`   | Show available commands                                      |
+
+## License
+
+[MIT](LICENSE)
