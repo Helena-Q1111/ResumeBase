@@ -189,6 +189,16 @@ Relative paths are resolved against the user-data directory above.
 
 Run `/init` to create your first experience, then `/log` to add bullets. See [Architecture → Workflows](#workflows) for the full command list and what each one does.
 
+## Contributing
+
+Issues and pull requests are welcome.
+
+Quick orientation when adding features:
+
+- New slash command / workflow → add a prompt file in [prompts/](prompts/), register it in [server.py](server.py)
+- New data operation → add an `@mcp.tool()` in [server.py](server.py) (contract-only docstring) plus the corresponding method on `StorageBackend`
+- New storage backend → implement [storage/base.py](storage/base.py) and wire it up in [storage/__init__.py](storage/__init__.py)
+
 ## License
 
 [MIT](LICENSE)
